@@ -1,1 +1,0 @@
-cmd_/home/research/Kernel-Module-Project/simple.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/research/Kernel-Module-Project/simple.ko /home/research/Kernel-Module-Project/simple.o /home/research/Kernel-Module-Project/simple.mod.o ;  true
