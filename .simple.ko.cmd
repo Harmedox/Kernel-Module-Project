@@ -1,0 +1,1 @@
+cmd_/home/oscreader/Kernel-Module-Project/simple.ko := ld -r -m elf_i386 -T /usr/src/linux-headers-3.16.0-4-common/scripts/module-common.lds --build-id  -o /home/oscreader/Kernel-Module-Project/simple.ko /home/oscreader/Kernel-Module-Project/simple.o /home/oscreader/Kernel-Module-Project/simple.mod.o

@@ -1,94 +1,150 @@
-// insert libraries
-
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/types.h>
-#include <linux/hashtable.h>
+#include <linux/module.h>    // for all kernel modules
+#include <linux/kernel.h>    // for KERN_INFO
+#include <linux/init.h>      // for __init and __exit macros
+#include <linux/list.h>		// for list operations
+#include <linux/types.h>	// for hlist and list 
 #include <linux/slab.h>
-
-//number of bits defining bucket size
-#define BITS 3
-
-//software license information
-MODULE_LICENSE("GPL");
-//module descripton
-MODULE_DESCRIPTION("Kernel Module - Project");
-//Module Author
-MODULE_AUTHOR("AAA");
-
-/* Define structure for object 'birthday' */
-struct Birthday {
-	char name[100];
+  
+// given birthday struct
+struct birthday
+{
 	int day;
 	int month;
 	int year;
+	char name[100];
 	struct hlist_node birthday_hash_list;
 };
 
-//create hash table 
-DEFINE_HASHTABLE(birthday_hash, BITS);
-
-//define module entry point
-int simple_init(void)
+struct h_table
 {
+	struct hlist_head *head_list;
+	unsigned int size;
+};
 
-	struct Birthday *aNewBirthday, *aBirthday;
+static struct h_table birth_day_table;
+
+// traverse all elements in hash table
+static void traverse_hash_table(void) {
 	unsigned int i;
+	struct hlist_node *p;
+	for (i = 0; i < birth_day_table.size; i++) {
+		hlist_for_each(p, &(birth_day_table.head_list[i])) {
+    	struct birthday *birth_day = hlist_entry(p, struct birthday, birthday_hash_list);
+    	printk("Entry[%d]: Name: %s, Day: %d, Month: %d, Year: %d\n",
+    		i, birth_day->name, birth_day->day, birth_day->month, birth_day->year);
 
-	//output message to kernel log buffer. to be read by 'dmesg' command
-	printk(KERN_INFO "Loading Module\n");
-
-	/*adding elements to the birthday data structure*/
-	for(i=1; i<=8; ++i){
-		aNewBirthday = kmalloc(sizeof(*aNewBirthday), GFP_KERNEL);
-		//memory availability check
-		if(!aNewBirthday){
-			printk("cannot allocate memory");
-			return -ENOMEM;
 		}
-
-		sprintf(aNewBirthday->name, "user_%d", i);
-		aNewBirthday->day = 2*i;
-		aNewBirthday->month = i;
-		aNewBirthday->year = 2000 + i;
-
-		//add item to the birthday hash
-		hash_add(birthday_hash, &aNewBirthday->birthday_hash_list, aNewBirthday->name);
 	}
-	
-	printk(KERN_INFO "Traversing birthday hash \n");
-	hash_for_each(birthday_hash, i, aBirthday, birthday_hash_list) {
-		//print entries of the hash table, each record as object aBirthday
-		printk(KERN_INFO "Entry[%d]: Name: %s, Day: %d, Month: %d, Year: %d\n", i,aBirthday->name,aBirthday->day,aBirthday->month,aBirthday->year);
-	}
-
-	printk(KERN_INFO "\n");
-
-	return 0;
 }
-
-//define module exit point
-void simple_exit(void)
+// hash function for hash index - using lose lose hashing algorithm
+unsigned int hash_func(const char *str)
 {
-	struct Birthday *aBirthday;
-	unsigned int j; //node pointer
+	unsigned long hash = 0;
+	int c;
+	while ( (c = *str++ ))
+	    hash += c;
 
-	printk(KERN_INFO "Removing Module\n");
-
-	printk(KERN_INFO "delete nodes in the birthday hash table");
-
-	hash_for_each(birthday_hash, j, aBirthday, birthday_hash_list){
-		//delete each node of birthday hash table
-		printk(KERN_INFO "Entry[%d]: deleted", j);
-		hash_del(&aBirthday->birthday_hash_list);
-		kfree(aBirthday);
-	}
-	printk(KERN_INFO "\n");
+	return hash % birth_day_table.size;
 }
 
-//register module entry and exit points with kernel
+// get birth_day element by name 
+struct birthday *get_birth_day_by_name(const char *name) {
+	struct hlist_node *p;
+	unsigned int hash_index = hash_func(name);
+	hlist_for_each(p, &(birth_day_table.head_list[hash_index])) 
+	{
+		struct birthday *birth_day = hlist_entry(p, struct birthday, birthday_hash_list);
+		if (!strncmp(birth_day->name, name, 101))
+			return birth_day;  
+	}
+	return NULL;
+}
+
+// Initialize a new hash table
+static void init_new_table(unsigned int n_birth_days)
+{  	
+	unsigned int i;
+	struct hlist_head *heads;
+	heads = kmalloc(sizeof(*heads) * n_birth_days, GFP_KERNEL);
+  	if (heads != NULL)
+    	for (i = 0; i < n_birth_days; i++)
+      		INIT_HLIST_HEAD(&heads[i]);
+    birth_day_table.head_list = heads;
+    birth_day_table.size = n_birth_days;
+}
+
+
+static void hash_add(struct birthday birth_day)
+{
+	unsigned int hash_index = hash_func(birth_day.name);
+	hlist_add_head(&birth_day.birthday_hash_list, &(birth_day_table.head_list[hash_index]));
+}
+
+// Kernel Module initializer.
+static int __init simple_init(void)
+{
+	const unsigned int num_birth_days = 5;
+
+	struct birthday birth_day1 = {
+	    .day = 1,
+	    .month = 1,
+	    .year = 1990,
+	    .name = "abc xyz",
+	};
+	struct birthday birth_day2 = {
+	    .day = 2,
+	    .month = 2,
+	    .year = 1990,
+	    .name = "def xyz",
+	};
+	struct birthday birth_day3 = { 
+	    .day = 3,
+	    .month = 3,
+	    .year = 1990,
+	    .name = "ghi xyz",
+	};
+	struct birthday birth_day4 = {
+	    .day = 4,
+	    .month = 4,
+	    .year = 1990,
+	    .name = "jkl xyz",
+	};
+	struct birthday birth_day5 = {
+	    .day = 5,
+	    .month = 5,
+	    .year = 1990,
+	    .name = "mno xyz",
+	};
+
+	struct birthday *tmp;
+
+    printk(KERN_INFO "Starting birthday hash table module!\n\n");
+    init_new_table(num_birth_days);
+
+    printk(KERN_INFO "Adding 5 birthday objects to hash table.\n\n");
+
+	hash_add(birth_day1);
+	hash_add(birth_day2);
+	hash_add(birth_day3);
+	hash_add(birth_day4);
+	hash_add(birth_day5);
+
+	printk(KERN_INFO "Traversing all elements in the hash table.\n\n");
+	traverse_hash_table();
+
+	tmp = get_birth_day_by_name("Alfredo Past");
+	  if (tmp) {
+	    printk("%s, %d\n", tmp->name, tmp->day);
+	}
+    return 0;    // Non-zero return means that the module couldn't be loaded.
+}
+
+// Kernel Module destructor.
+static void __exit simple_exit(void)
+{
+	printk(KERN_INFO "Removing Module\n");
+	kfree(birth_day_table.head_list);
+}
+
 module_init(simple_init);
 module_exit(simple_exit);
-
-
